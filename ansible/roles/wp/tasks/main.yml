@@ -1,0 +1,115 @@
+# - name: Download wordpress
+#   get_url:
+#     url: https://wordpress.org/latest.tar.gz
+#     dest: /mnt/gfs2/WP/latest.tar.gz
+
+# - name: Unzip wordpress
+#   unarchive:
+#     src: /mnt/gfs2/WP/latest.tar.gz
+#     dest: /mnt/gfs2/WP/
+#     remote_src: yes
+
+# - name: Install packages for wordpress
+#   yum: name={{ item }}
+#   with_items:
+#     - unzip
+
+# - name: Copy
+#   copy:
+#     src: roles/wp/files/wordpress-4.5.3.zip
+#     dest: /mnt/gfs2/WP/wordpress-4.5.3.zip
+
+# - name: Unzip wordpress
+#   unarchive:
+#     src: /mnt/gfs2/WP/wordpress-4.5.3.zip
+#     dest: /mnt/gfs2/WP/
+#     remote_src: yes
+
+# - name: Copy nginx and config  with owner and permissions
+#   ansible.builtin.copy:
+#     src: wp-config.php
+#     dest: /mnt/gfs2/WP/wordpress/wp-config.php
+#     owner: nginx
+#     group: nginx
+#     mode: '0644'
+
+# # - name: Configure the Fork version of WP4PG
+# #   script: wp.sh
+# #   ignore_errors: True
+
+# - name: Change Ownership of wordpress files
+#   file:
+#     path: /mnt/gfs2/WP/wordpress
+#     owner: nginx
+#     mode: '0755'
+#     state: directory
+#     recurse: yes
+#   # notify:
+#   # - Restart nginx
+
+# - name: Change Ownership of var lib php
+#   file:
+#     path: /mnt/gfs2/WP/wordpress
+#     owner: nginx
+#     group: nginx
+#     mode: '0755'
+#     state: directory
+#     recurse: yes
+#   # notify:
+#   # - Restart php-fpm
+
+
+# - name: Install wget unzip git
+#   yum:
+#     name:
+#      - wget
+#      - unzip
+#      - git
+
+- name: Disable SELinux
+  selinux:
+    state: disabled
+
+- name: Download wordpress
+  get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /mnt/gfs2/WP/latest.tar.gz
+
+- name: Extract wordpress archive
+  unarchive:
+    src: /mnt/gfs2/WP/latest.tar.gz
+    dest: /mnt/gfs2/WP/
+    remote_src: yes
+    # extra_opts:
+    # - --strip-components=1
+    owner: nginx
+    group: nginx
+
+- name: Download pg4wp
+  git:
+    repo: https://github.com/kevinoid/postgresql-for-wordpress.git
+    dest: /mnt/gfs2/WP/postgresql-for-wordpress
+- name: Copy pg4wp folder to wp-content
+
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    remote_src: yes
+    owner: nginx
+    group: nginx
+  loop:
+    - { src: /mnt/gfs2/WP/postgresql-for-wordpress/pg4wp, dest: /mnt/gfs2/WP/wordpress/wp-content}
+    - { src: /mnt/gfs2/WP/wordpress/wp-content/pg4wp/db.php, dest: /mnt/gfs2/WP/wordpress/wp-content/db.php}
+
+- name: Remove postgresql-for-wordpress directory
+  file:
+    path: /mnt/gfs2/WP/postgresql-for-wordpress
+    state: absent
+
+- name: Copy nginx and config  with owner and permissions
+  ansible.builtin.copy:
+    src: wp-config.php
+    dest: /mnt/gfs2/WP/wordpress/wp-config.php
+    owner: nginx
+    group: nginx
+    mode: '0644'

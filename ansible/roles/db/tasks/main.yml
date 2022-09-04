@@ -1,0 +1,147 @@
+- name: Download and Install PostgreSQL repo
+  yum: 
+    name: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+    state: present
+    validate_certs: no
+
+- name: Install packages
+  yum:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - epel-release
+    - etcd
+    - centos-release-scl-rh
+    - llvm-toolset-7-clang
+    - postgresql11-server
+    - postgresql11
+    - postgresql11-devel
+    - python3
+    - python3-pip
+    - python-psycopg2
+    - patroni
+    - haproxy
+    - keepalived
+
+- name: setenforce 0
+  command: setenforce 0
+
+- name: Configure etcd
+  template:
+    src: "roles/db/templates/etcd.j2"
+    dest: /etc/etcd/etcd.conf
+
+- name: Start service etcd
+  systemd:
+    name: etcd
+    state: restarted
+    enabled: yes
+
+- name: Stop postgres service
+  service:
+    name: postgresql-11
+    state: stopped
+
+- name: Install and upgrade pip
+  pip:
+    name: pip
+    extra_args: --upgrade
+    executable: pip3
+
+- name: Install python packages
+  pip:
+    name: "{{ item }}"
+    state: latest
+    executable: pip3
+  loop:
+    - setuptools
+    - psycopg2
+    - psycopg2-binary
+    - python-etcd
+
+- name: Create /data/patroni
+  file:
+    path: /data/patroni
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0700'
+
+- name: Configure patroni.yml
+  template:
+    src: roles/db/templates/patroni.j2
+    dest: /etc/patroni.yml    
+
+- name: Configure patroni.service
+  copy:
+    src: roles/db/files/patroni.service
+    dest: /etc/systemd/system/
+
+- name: Start patroni service
+  systemd:
+    daemon_reload: yes
+    name: "{{ item }}"
+    state: started
+  loop:
+    - patroni
+
+- name: Configure haproxy
+  template:
+    src: roles/db/files/haproxy.cfg
+    dest: /etc/haproxy/haproxy.cfg
+
+- name: Updating net.ipv4.ip_nonlocal_bind parameter
+  shell: "{{ item }}"
+  loop:
+    - "sysctl net.ipv4.ip_nonlocal_bind=1"
+
+- name: Updating net.ipv4.ip_forward parameter
+  shell: "{{ item }}"
+  loop:
+    - "sysctl net.ipv4.ip_forward=1"
+
+- name: Updating sysctl parameters
+  shell: "{{ item }}"
+  loop:
+    - "sysctl -p"
+
+- name: Copy kepalived.conf with owner and permissions
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable haproxy and keepalived
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+  loop:
+    - haproxy
+    - keepalived
+
+- name: Create wordpress db
+  postgresql_db:
+    login_host: localhost
+    login_user: postgres
+    login_password: postgres
+    port: 5432
+    name: wordpress
+    encoding: UTF-8
+    template: template0
+    state: present
+  ignore_errors: true
+
+- name: Create wordpress db user 
+  postgresql_user:
+    login_user: postgres
+    login_password: postgres
+    login_host: localhost
+    name: wordpressuser
+    password: password
+    db: wordpress
+    priv: "ALL"
+  ignore_errors: true
