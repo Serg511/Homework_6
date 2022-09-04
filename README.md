@@ -1,4 +1,4 @@
-## Homework_5 - реализация кластера postgreSQL с помощью patroni 
+## Homework_6 - реализация кластера postgreSQL с помощью patroni 
 
 Данный Terraform-стенд развертывает следующую конфигурацию:
 * 2 виртуальные машины с Nginx, Keepalived
